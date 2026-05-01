@@ -1,3 +1,4 @@
 ﻿# TEJ-CompEng-Culm
 
-"wip, am bad"
+wip, am bad
+hi
