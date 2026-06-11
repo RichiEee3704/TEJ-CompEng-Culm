@@ -286,6 +286,9 @@ void stateEmergency() {
     // Proceed to final end screen state to clear state machine cycle
     currentState = STATE_END_SCREEN;
     setCurrentPage(endScreenPage);
+
+    //Happiness set to 0% as punishment
+    petHappiness = 0;
 }
 
 void stateEndScreen(boolean swPressed) {
