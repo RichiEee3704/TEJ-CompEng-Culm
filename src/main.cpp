@@ -8,6 +8,7 @@
 const int X_PIN = A0; 
 const int Y_PIN = A1; 
 const int SW_PIN = 7; 
+const int EMERGENCY_PIN = 8; // NEW: Dedicated hardware panic/emergency override button
 
 // const int buzzerPin = 6; buzzer abdandoned i think
 const int servoPin = 10;
@@ -34,9 +35,9 @@ void updateStatsLogic();
 void stateStart(boolean swPressed);
 void stateTimeSelect(boolean swPressed, int xValue, int yValue);
 void stateLocking();
-void stateMainMenu(boolean swPressed, int xValue);
-void stateActiveApp(boolean swPressed, int xValue, int yValue);
-void stateTimeLeftView(boolean swPressed);
+void stateMainMenu(boolean swPressed, int xValue, boolean emergencyPressed);
+void stateActiveApp(boolean swPressed, int xValue, int yValue, boolean emergencyPressed);
+void stateTimeLeftView(boolean swPressed, boolean emergencyPressed);
 void stateEmergency();
 void stateEndScreen(boolean swPressed);
 
@@ -82,6 +83,7 @@ void setup() {
     servo.write(0); 
 
     pinMode(SW_PIN, INPUT_PULLUP); 
+    pinMode(EMERGENCY_PIN, INPUT_PULLUP); // NEW: Initialize emergency hardware button pin
     // pinMode(buzzerPin, OUTPUT);
     
     setCurrentPage(startPage);
@@ -94,18 +96,19 @@ void loop() {
     int yValue = analogRead(Y_PIN);
     
     boolean swPressed = (digitalRead(SW_PIN) == LOW);
+    boolean emergencyPressed = (digitalRead(EMERGENCY_PIN) == LOW); // NEW: Continuously sample emergency input state
 
     switch (currentState) {
-        case STATE_START:       stateStart(swPressed);                             break;
-        case STATE_TIME_SELECT: stateTimeSelect(swPressed, xValue, yValue);        break;
-        case STATE_LOCKING:     stateLocking();                                    break;
-        case STATE_MAIN_MENU:   stateMainMenu(swPressed, xValue);                  break;
+        case STATE_START:       stateStart(swPressed);                                             break;
+        case STATE_TIME_SELECT: stateTimeSelect(swPressed, xValue, yValue);                        break;
+        case STATE_LOCKING:     stateLocking();                                                    break;
+        case STATE_MAIN_MENU:   stateMainMenu(swPressed, xValue, emergencyPressed);                break;
         case STATE_POMODORO:    
         case STATE_PET:         
-        case STATE_STATS:       stateActiveApp(swPressed, xValue, yValue);         break;
-        case STATE_TIME_LEFT:   stateTimeLeftView(swPressed);                      break;
-        case STATE_EMERGENCY:   stateEmergency();                                  break;
-        case STATE_END_SCREEN:  stateEndScreen(swPressed);                         break;
+        case STATE_STATS:       stateActiveApp(swPressed, xValue, yValue, emergencyPressed);       break;
+        case STATE_TIME_LEFT:   stateTimeLeftView(swPressed, emergencyPressed);                    break;
+        case STATE_EMERGENCY:   stateEmergency();                                                  break;
+        case STATE_END_SCREEN:  stateEndScreen(swPressed);                                         break;
     }
 }
 
@@ -166,7 +169,14 @@ void stateLocking() {
     setCurrentPage(mainMenuPage);
 }
 
-void stateMainMenu(boolean swPressed, int xValue) {
+void stateMainMenu(boolean swPressed, int xValue, boolean emergencyPressed) {
+    // NEW: Intercept menu runtime loops if physical panic override is clicked
+    if (emergencyPressed) {
+        currentState = STATE_EMERGENCY;
+        setCurrentPage(emergencyPage);
+        return;
+    }
+
     if (currentMillis - previousMillis > interval) {
         bool changed = false;
 
@@ -203,7 +213,14 @@ void stateMainMenu(boolean swPressed, int xValue) {
     }
 }
 
-void stateActiveApp(boolean swPressed, int xValue, int yValue) {
+void stateActiveApp(boolean swPressed, int xValue, int yValue, boolean emergencyPressed) {
+    // NEW: Instantly break out from actively viewed sub-apps (Pomodoro/Pet/Stats) if emergency occurs
+    if (emergencyPressed) {
+        currentState = STATE_EMERGENCY;
+        setCurrentPage(emergencyPage);
+        return;
+    }
+
     runActiveCountdown();
 
     if (currentState == STATE_POMODORO) {
@@ -240,7 +257,14 @@ void stateActiveApp(boolean swPressed, int xValue, int yValue) {
     }
 }
 
-void stateTimeLeftView(boolean swPressed) {
+void stateTimeLeftView(boolean swPressed, boolean emergencyPressed) {
+    //check emergency button during time tracking screens
+    if (emergencyPressed) {
+        currentState = STATE_EMERGENCY;
+        setCurrentPage(emergencyPage);
+        return;
+    }
+
     runActiveCountdown();
     
     if (currentState == STATE_TIME_LEFT) {
@@ -255,12 +279,11 @@ void stateTimeLeftView(boolean swPressed) {
 }
 
 void stateEmergency() {
-    // for(int i = 0; i < 5; i++){
-    //     digitalWrite(buzzerPin, HIGH);
-    //     delay(100);
-    //     digitalWrite(buzzerPin, LOW);
-    //     delay(100);
-    // }
+    //open up physical box safe lock instantly
+    servo.write(0); 
+    delay(500);
+    
+    // Proceed to final end screen state to clear state machine cycle
     currentState = STATE_END_SCREEN;
     setCurrentPage(endScreenPage);
 }
@@ -302,7 +325,7 @@ void updateCountdownDisplay() {
 }
 
 void updatePomodoroLogic() {
-    long lastPomoRender = 0;
+    static long lastPomoRender = 0;
     if (currentMillis - lastPomoRender > 250) {
         long elapsedPomo = currentMillis - pomoCycleStart;
         
@@ -312,11 +335,6 @@ void updatePomodoroLogic() {
             pomoDuration = (isBreakMode) ? (5 * 60 * 1000UL) : (25 * 60 * 1000UL);
             pomoCycleStart = currentMillis;
             if (!isBreakMode) completedCycles++;
-            
-            // fire short alert buzz
-            // digitalWrite(buzzerPin, HIGH);
-            // delay(150); 
-            // digitalWrite(buzzerPin, LOW);
             return;
         }
 
