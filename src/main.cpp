@@ -72,6 +72,10 @@ int completedCycles = 0;
 int petHappiness = 100;
 unsigned long lastDecayMillis = 0;
 
+//Servo Angles
+const int servoAngleLock = 100;
+const int servoAngleUnlock = 180;
+
 void setup() {
     Serial.begin(9600);
     Serial.println("--- StudyBox Booting Up ---");
@@ -80,7 +84,7 @@ void setup() {
     lcd.clear();
     
     servo.attach(servoPin);
-    servo.write(0); 
+    servo.write(servoAngleUnlock); 
 
     pinMode(SW_PIN, INPUT_PULLUP); 
     pinMode(EMERGENCY_PIN, INPUT_PULLUP); // NEW: Initialize emergency hardware button pin
@@ -158,7 +162,7 @@ void stateTimeSelect(boolean swPressed, int xValue, int yValue) {
 }
 
 void stateLocking() {
-    servo.write(90); 
+    servo.write(servoAngleLock); 
     delay(1000);     
     studyTimerStart = millis();
     pomoCycleStart = millis();
@@ -280,7 +284,7 @@ void stateTimeLeftView(boolean swPressed, boolean emergencyPressed) {
 
 void stateEmergency() {
     //open up physical box safe lock instantly
-    servo.write(0); 
+    servo.write(servoAngleUnlock); 
     delay(500);
     
     // Proceed to final end screen state to clear state machine cycle
@@ -292,7 +296,7 @@ void stateEmergency() {
 }
 
 void stateEndScreen(boolean swPressed) {
-    servo.write(0); 
+    servo.write(servoAngleUnlock); 
     if (swPressed) {
         delay(250);
         currentState = STATE_START;
